@@ -1,0 +1,898 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Pobreza Municipal México — 2010 & 2015</title>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/papaparse@5.4.1/papaparse.min.js"></script>
+  <style>
+    /* ── Reset & base ─────────────────────────────────────────── */
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg:        #0f1117;
+      --surface:   #1a1d27;
+      --surface2:  #22263a;
+      --accent:    #4f8ef7;
+      --accent2:   #f7a84f;
+      --danger:    #e05c5c;
+      --text:      #e8eaf0;
+      --muted:     #8b90a8;
+      --border:    #2d3250;
+      --radius:    12px;
+      --shadow:    0 4px 24px rgba(0,0,0,.45);
+    }
+
+    body {
+      font-family: 'Segoe UI', system-ui, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+    }
+
+    /* ── Header ───────────────────────────────────────────────── */
+    header {
+      background: linear-gradient(135deg, #1a1d27 0%, #0f1117 100%);
+      border-bottom: 1px solid var(--border);
+      padding: 1.4rem 2rem;
+      display: flex;
+      align-items: center;
+      gap: 1.2rem;
+    }
+    .header-icon { font-size: 2rem; }
+    header h1 { font-size: 1.35rem; font-weight: 700; letter-spacing: .02em; }
+    header p  { font-size: .82rem; color: var(--muted); margin-top: .15rem; }
+    .badge {
+      margin-left: auto;
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      border-radius: 20px;
+      padding: .3rem .9rem;
+      font-size: .75rem;
+      color: var(--muted);
+    }
+
+    /* ── Layout ───────────────────────────────────────────────── */
+    main { padding: 1.6rem 2rem 3rem; max-width: 1500px; margin: 0 auto; }
+
+    /* ── Controls ─────────────────────────────────────────────── */
+    .controls {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 1rem;
+      align-items: flex-end;
+      margin-bottom: 1.6rem;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 1.1rem 1.4rem;
+    }
+    .ctrl-group { display: flex; flex-direction: column; gap: .35rem; }
+    .ctrl-group label { font-size: .72rem; color: var(--muted); text-transform: uppercase; letter-spacing: .06em; }
+    select, input[type=text] {
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      border-radius: 7px;
+      color: var(--text);
+      padding: .45rem .8rem;
+      font-size: .88rem;
+      outline: none;
+      transition: border-color .2s;
+      min-width: 180px;
+    }
+    select:focus, input:focus { border-color: var(--accent); }
+    input[type=text] { min-width: 220px; }
+    .btn {
+      background: var(--accent);
+      color: #fff;
+      border: none;
+      border-radius: 7px;
+      padding: .5rem 1.2rem;
+      font-size: .88rem;
+      cursor: pointer;
+      font-weight: 600;
+      transition: opacity .15s;
+      align-self: flex-end;
+    }
+    .btn:hover { opacity: .85; }
+    .btn-secondary {
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      color: var(--text);
+    }
+    #status-bar {
+      margin-left: auto;
+      font-size: .8rem;
+      color: var(--muted);
+      align-self: center;
+    }
+    #status-bar .dot {
+      display: inline-block;
+      width: 8px; height: 8px;
+      border-radius: 50%;
+      background: #888;
+      margin-right: .4rem;
+      vertical-align: middle;
+    }
+    #status-bar .dot.ok  { background: #4caf7c; }
+    #status-bar .dot.err { background: var(--danger); }
+    #status-bar .dot.loading {
+      background: var(--accent);
+      animation: pulse 1s infinite;
+    }
+    @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.3} }
+
+    /* ── KPI cards ────────────────────────────────────────────── */
+    .kpi-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+      gap: 1rem;
+      margin-bottom: 1.6rem;
+    }
+    .kpi {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 1.1rem 1.3rem;
+      position: relative;
+      overflow: hidden;
+    }
+    .kpi::before {
+      content: '';
+      position: absolute;
+      top: 0; left: 0;
+      width: 3px; height: 100%;
+      background: var(--accent);
+    }
+    .kpi.red::before  { background: var(--danger); }
+    .kpi.gold::before { background: var(--accent2); }
+    .kpi-label { font-size: .72rem; color: var(--muted); text-transform: uppercase; letter-spacing: .06em; margin-bottom: .4rem; }
+    .kpi-val   { font-size: 1.75rem; font-weight: 700; line-height: 1; }
+    .kpi-sub   { font-size: .78rem; color: var(--muted); margin-top: .35rem; }
+    .kpi-delta { font-size: .78rem; margin-top: .3rem; }
+    .kpi-delta.down { color: #4caf7c; }
+    .kpi-delta.up   { color: var(--danger); }
+
+    /* ── Charts grid ──────────────────────────────────────────── */
+    .charts-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(420px, 1fr));
+      gap: 1.4rem;
+      margin-bottom: 1.6rem;
+    }
+    .card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 1.3rem;
+    }
+    .card h3 {
+      font-size: .9rem;
+      font-weight: 600;
+      color: var(--text);
+      margin-bottom: 1rem;
+    }
+    .card h3 span {
+      font-size: .75rem;
+      color: var(--muted);
+      font-weight: 400;
+      margin-left: .4rem;
+    }
+    .chart-wrap { position: relative; }
+
+    /* ── Full-width table card ────────────────────────────────── */
+    .table-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 1.3rem;
+      overflow-x: auto;
+    }
+    .table-card h3 {
+      font-size: .9rem;
+      font-weight: 600;
+      margin-bottom: 1rem;
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: .82rem;
+    }
+    thead th {
+      text-align: left;
+      color: var(--muted);
+      font-size: .72rem;
+      text-transform: uppercase;
+      letter-spacing: .05em;
+      padding: .55rem .8rem;
+      border-bottom: 1px solid var(--border);
+      cursor: pointer;
+      user-select: none;
+      white-space: nowrap;
+    }
+    thead th:hover { color: var(--accent); }
+    tbody tr { border-bottom: 1px solid var(--border); transition: background .12s; }
+    tbody tr:hover { background: var(--surface2); }
+    tbody td { padding: .5rem .8rem; }
+    .pct-bar {
+      display: flex;
+      align-items: center;
+      gap: .6rem;
+    }
+    .bar-track {
+      flex: 1;
+      height: 6px;
+      background: var(--surface2);
+      border-radius: 3px;
+      overflow: hidden;
+      min-width: 60px;
+    }
+    .bar-fill { height: 100%; border-radius: 3px; }
+    .bar-num { width: 46px; text-align: right; font-size: .8rem; }
+    .pill {
+      display: inline-block;
+      padding: .15rem .55rem;
+      border-radius: 20px;
+      font-size: .72rem;
+      font-weight: 600;
+    }
+    .pill-down { background: rgba(76,175,124,.18); color: #4caf7c; }
+    .pill-up   { background: rgba(224,92,92,.18);  color: var(--danger); }
+    .pill-neu  { background: var(--surface2); color: var(--muted); }
+
+    /* ── Pagination ───────────────────────────────────────────── */
+    .pagination {
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      gap: .6rem;
+      margin-top: 1rem;
+    }
+    .page-btn {
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      color: var(--text);
+      border-radius: 6px;
+      padding: .3rem .75rem;
+      font-size: .8rem;
+      cursor: pointer;
+      transition: background .15s;
+    }
+    .page-btn:hover, .page-btn.active { background: var(--accent); border-color: var(--accent); color: #fff; }
+    .page-btn:disabled { opacity: .35; cursor: default; }
+    .page-info { font-size: .8rem; color: var(--muted); }
+
+    /* ── Loader overlay ───────────────────────────────────────── */
+    #loader {
+      position: fixed;
+      inset: 0;
+      background: rgba(15,17,23,.88);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      z-index: 999;
+      gap: 1rem;
+    }
+    .spinner {
+      width: 44px; height: 44px;
+      border: 4px solid var(--border);
+      border-top-color: var(--accent);
+      border-radius: 50%;
+      animation: spin .8s linear infinite;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    #loader p { color: var(--muted); font-size: .88rem; }
+
+    /* ── Responsive ───────────────────────────────────────────── */
+    @media (max-width: 700px) {
+      main { padding: 1rem; }
+      .charts-grid { grid-template-columns: 1fr; }
+      header { flex-wrap: wrap; }
+    }
+  </style>
+</head>
+<body>
+
+<!-- Loader -->
+<div id="loader">
+  <div class="spinner"></div>
+  <p id="loader-msg">Cargando datos…</p>
+</div>
+
+<!-- Header -->
+<header>
+  <div class="header-icon">📊</div>
+  <div>
+    <h1>Medición de Pobreza Municipal · México</h1>
+    <p>CONEVAL — Estimaciones 2010 y 2015</p>
+  </div>
+  <span class="badge">~2,400 municipios</span>
+</header>
+
+<main>
+  <!-- Controls -->
+  <div class="controls">
+    <div class="ctrl-group">
+      <label>Año</label>
+      <select id="sel-year">
+        <option value="both">Comparar 2010 vs 2015</option>
+        <option value="2010">Solo 2010</option>
+        <option value="2015">Solo 2015</option>
+      </select>
+    </div>
+    <div class="ctrl-group">
+      <label>Estado</label>
+      <select id="sel-estado"><option value="">Todos los estados</option></select>
+    </div>
+    <div class="ctrl-group">
+      <label>Indicador principal</label>
+      <select id="sel-indicador">
+        <option value="pobreza">Pobreza total</option>
+        <option value="pobreza_m">Pobreza moderada</option>
+        <option value="pobreza_e">Pobreza extrema</option>
+        <option value="ic_rezedu">Rezago educativo</option>
+        <option value="ic_asalud">Acceso a salud</option>
+        <option value="ic_segsoc">Seguridad social</option>
+        <option value="ic_cv">Calidad de vivienda</option>
+        <option value="ic_sbv">Servicios básicos</option>
+        <option value="ic_ali">Alimentación</option>
+      </select>
+    </div>
+    <div class="ctrl-group">
+      <label>Buscar municipio</label>
+      <input type="text" id="search" placeholder="Clave o nombre de municipio…" />
+    </div>
+    <button class="btn btn-secondary" id="btn-reset">↺ Limpiar</button>
+    <div id="status-bar"><span class="dot loading" id="dot"></span><span id="status-txt">Cargando…</span></div>
+  </div>
+
+  <!-- KPI cards -->
+  <div class="kpi-grid" id="kpi-grid">
+    <div class="kpi"><div class="kpi-label">Municipios</div><div class="kpi-val" id="kpi-mun">—</div></div>
+    <div class="kpi red"><div class="kpi-label">Pobreza (promedio)</div><div class="kpi-val" id="kpi-pob">—</div><div class="kpi-delta" id="kpi-pob-d"></div></div>
+    <div class="kpi red"><div class="kpi-label">Pobreza extrema (prom.)</div><div class="kpi-val" id="kpi-ext">—</div><div class="kpi-delta" id="kpi-ext-d"></div></div>
+    <div class="kpi gold"><div class="kpi-label">Pobreza moderada (prom.)</div><div class="kpi-val" id="kpi-mod">—</div><div class="kpi-delta" id="kpi-mod-d"></div></div>
+    <div class="kpi"><div class="kpi-label">Pobl. en pobreza (millones)</div><div class="kpi-val" id="kpi-pobpob">—</div><div class="kpi-delta" id="kpi-pobpob-d"></div></div>
+    <div class="kpi"><div class="kpi-label">Municipio más pobre</div><div class="kpi-val" style="font-size:1.1rem" id="kpi-worst">—</div><div class="kpi-sub" id="kpi-worst-sub"></div></div>
+  </div>
+
+  <!-- Charts -->
+  <div class="charts-grid">
+    <div class="card">
+      <h3>Distribución por nivel de pobreza <span>histograma · indicador seleccionado</span></h3>
+      <div class="chart-wrap"><canvas id="chart-hist" height="220"></canvas></div>
+    </div>
+    <div class="card">
+      <h3>Top 15 municipios más pobres <span>indicador seleccionado</span></h3>
+      <div class="chart-wrap"><canvas id="chart-top" height="220"></canvas></div>
+    </div>
+    <div class="card">
+      <h3>Carencias promedio por estado <span>barras apiladas</span></h3>
+      <div class="chart-wrap"><canvas id="chart-estado" height="220"></canvas></div>
+    </div>
+    <div class="card">
+      <h3>Cambio 2010 → 2015 <span>dispersión por municipio (muestra)</span></h3>
+      <div class="chart-wrap"><canvas id="chart-scatter" height="220"></canvas></div>
+    </div>
+  </div>
+
+  <!-- Table -->
+  <div class="table-card">
+    <h3>📋 Detalle municipal <span style="font-size:.8rem;color:var(--muted);font-weight:400" id="tbl-count"></span></h3>
+    <table id="data-table">
+      <thead>
+        <tr>
+          <th data-col="cve_mun">Clave</th>
+          <th data-col="ent">Estado</th>
+          <th data-col="pobtot">Población</th>
+          <th data-col="pobreza">Pobreza %</th>
+          <th data-col="pobreza_m">Moderada %</th>
+          <th data-col="pobreza_e">Extrema %</th>
+          <th data-col="ic_rezedu">Rezago educ.</th>
+          <th data-col="ic_asalud">Salud</th>
+          <th data-col="ic_segsoc">Seg. social</th>
+          <th data-col="ic_ali">Alimentación</th>
+          <th data-col="_delta" id="th-delta">Δ 2010→2015</th>
+        </tr>
+      </thead>
+      <tbody id="tbl-body"></tbody>
+    </table>
+    <div class="pagination" id="pagination"></div>
+  </div>
+</main>
+
+<script>
+/* ═══════════════════════════════════════════════════════
+   DASHBOARD — Pobreza Municipal México 2010 & 2015
+   ═══════════════════════════════════════════════════════ */
+
+const FILES = {
+  2010: 'pobreza_calibrada_municipal_2010.csv',
+  2015: 'pobreza_calibrada_municipal_2015.csv',
+};
+
+const ESTADOS = {
+  '01':'Aguascalientes','02':'Baja California','03':'Baja California Sur',
+  '04':'Campeche','05':'Coahuila','06':'Colima','07':'Chiapas',
+  '08':'Chihuahua','09':'CDMX','10':'Durango','11':'Guanajuato',
+  '12':'Guerrero','13':'Hidalgo','14':'Jalisco','15':'Estado de México',
+  '16':'Michoacán','17':'Morelos','18':'Nayarit','19':'Nuevo León',
+  '20':'Oaxaca','21':'Puebla','22':'Querétaro','23':'Quintana Roo',
+  '24':'San Luis Potosí','25':'Sinaloa','26':'Sonora','27':'Tabasco',
+  '28':'Tamaulipas','29':'Tlaxcala','30':'Veracruz','31':'Yucatán','32':'Zacatecas',
+};
+
+const CARENCIAS = ['ic_rezedu','ic_asalud','ic_segsoc','ic_cv','ic_sbv','ic_ali'];
+const CARENCIAS_LABELS = ['Rezago educ.','Salud','Seg. social','Calidad vivienda','Serv. básicos','Alimentación'];
+
+let raw = { 2010: [], 2015: [] };
+let merged = [];          // array of {cve_mun, ent, pobtot_15, ...fields_2010, ...fields_2015, delta}
+let filtered = [];
+let sortCol = 'pobreza', sortDir = -1;
+let page = 1;
+const PAGE_SIZE = 20;
+let charts = {};
+
+/* ── Utility ──────────────────────────────────────────── */
+const fmt  = v => v != null && !isNaN(v) ? (v * 100).toFixed(1) + '%' : '—';
+const fmtN = v => v != null && !isNaN(v) ? (+v).toLocaleString('es-MX') : '—';
+const avg  = arr => arr.length ? arr.reduce((a,b)=>a+b,0)/arr.length : 0;
+const getV = (row, col) => { const v = parseFloat(row[col]); return isNaN(v) ? null : v; };
+
+function setStatus(state, msg) {
+  document.getElementById('dot').className = 'dot ' + state;
+  document.getElementById('status-txt').textContent = msg;
+}
+
+/* ── Load CSVs ────────────────────────────────────────── */
+async function loadCSV(file) {
+  return new Promise((resolve, reject) => {
+    Papa.parse(file, {
+      download: true,
+      header: true,
+      dynamicTyping: false,
+      skipEmptyLines: true,
+      complete: r => resolve(r.data),
+      error: e => reject(e),
+    });
+  });
+}
+
+/* ── Bootstrap ────────────────────────────────────────── */
+async function init() {
+  setStatus('loading', 'Cargando 2010…');
+  document.getElementById('loader-msg').textContent = 'Leyendo datos 2010…';
+  raw[2010] = await loadCSV(FILES[2010]);
+
+  setStatus('loading', 'Cargando 2015…');
+  document.getElementById('loader-msg').textContent = 'Leyendo datos 2015…';
+  raw[2015] = await loadCSV(FILES[2015]);
+
+  document.getElementById('loader-msg').textContent = 'Procesando…';
+  buildMerged();
+  populateEstados();
+  attachEvents();
+  applyFilters();
+
+  document.getElementById('loader').style.display = 'none';
+  setStatus('ok', `${raw[2010].length.toLocaleString()} mun. 2010 · ${raw[2015].length.toLocaleString()} mun. 2015`);
+}
+
+/* ── Merge both years by cve_mun ─────────────────────── */
+function buildMerged() {
+  const map10 = {};
+  raw[2010].forEach(r => { map10[r.cve_mun] = r; });
+
+  const cols = ['pobreza','pobreza_m','pobreza_e','ic_rezedu','ic_asalud','ic_segsoc','ic_cv','ic_sbv','ic_ali','pobtot'];
+
+  raw[2015].forEach(r15 => {
+    const r10 = map10[r15.cve_mun];
+    const obj = {
+      cve_mun: r15.cve_mun,
+      ent: r15.ent,
+      pobtot: getV(r15,'pobtot'),
+    };
+    cols.forEach(c => {
+      obj[c + '_15'] = getV(r15, c);
+      obj[c + '_10'] = r10 ? getV(r10, c) : null;
+    });
+    // primary fields (default to 2015)
+    cols.forEach(c => { obj[c] = obj[c + '_15']; });
+    obj.delta = (obj.pobreza_15 != null && obj.pobreza_10 != null)
+      ? obj.pobreza_15 - obj.pobreza_10 : null;
+    merged.push(obj);
+  });
+
+  // Add 2010-only municipalities
+  raw[2010].forEach(r10 => {
+    if (!merged.find(m => m.cve_mun === r10.cve_mun)) {
+      const obj = { cve_mun: r10.cve_mun, ent: r10.ent, pobtot: getV(r10,'pobtot') };
+      cols.forEach(c => {
+        obj[c + '_10'] = getV(r10, c);
+        obj[c + '_15'] = null;
+        obj[c] = obj[c + '_10'];
+      });
+      obj.delta = null;
+      merged.push(obj);
+    }
+  });
+}
+
+/* ── Populate state dropdown ─────────────────────────── */
+function populateEstados() {
+  const sel = document.getElementById('sel-estado');
+  Object.entries(ESTADOS).sort((a,b)=>a[1].localeCompare(b[1])).forEach(([k,v]) => {
+    const o = document.createElement('option');
+    o.value = k; o.textContent = v;
+    sel.appendChild(o);
+  });
+}
+
+/* ── Events ───────────────────────────────────────────── */
+function attachEvents() {
+  ['sel-year','sel-estado','sel-indicador'].forEach(id => {
+    document.getElementById(id).addEventListener('change', () => { page=1; applyFilters(); });
+  });
+  document.getElementById('search').addEventListener('input', () => { page=1; applyFilters(); });
+  document.getElementById('btn-reset').addEventListener('click', () => {
+    document.getElementById('sel-year').value = 'both';
+    document.getElementById('sel-estado').value = '';
+    document.getElementById('sel-indicador').value = 'pobreza';
+    document.getElementById('search').value = '';
+    page=1; applyFilters();
+  });
+  document.querySelectorAll('thead th[data-col]').forEach(th => {
+    th.addEventListener('click', () => {
+      const c = th.dataset.col;
+      if (sortCol === c) sortDir *= -1; else { sortCol = c; sortDir = -1; }
+      page=1; renderTable();
+    });
+  });
+}
+
+/* ── Filter & drive ───────────────────────────────────── */
+function applyFilters() {
+  const year  = document.getElementById('sel-year').value;
+  const estado = document.getElementById('sel-estado').value;
+  const indic = document.getElementById('sel-indicador').value;
+  const q     = document.getElementById('search').value.trim().toLowerCase();
+
+  // Decide which field suffix to use
+  const sfx = year === '2010' ? '_10' : '_15';
+
+  filtered = merged.filter(m => {
+    if (estado && m.ent !== estado) return false;
+    if (q && !m.cve_mun.toLowerCase().includes(q)) return false;
+    return true;
+  });
+
+  // Set primary columns according to year
+  filtered = filtered.map(m => {
+    const o = { ...m };
+    ['pobreza','pobreza_m','pobreza_e','ic_rezedu','ic_asalud','ic_segsoc','ic_cv','ic_sbv','ic_ali','pobtot'].forEach(c => {
+      o[c] = year === '2010' ? m[c + '_10'] : m[c + '_15'];
+    });
+    o._indic = o[indic];
+    return o;
+  });
+
+  // Update delta column header visibility
+  document.getElementById('th-delta').style.display = year === 'both' ? '' : 'none';
+
+  updateKPIs(year, indic);
+  updateCharts(year, indic);
+  renderTable();
+}
+
+/* ── KPIs ─────────────────────────────────────────────── */
+function updateKPIs(year, indic) {
+  const rows15 = filtered.filter(m => m.pobreza_15 != null);
+  const rows10 = filtered.filter(m => m.pobreza_10 != null);
+
+  const isBoth = year === 'both';
+  const rows   = year === '2010'
+    ? filtered.filter(m => m.pobreza_10 != null).map(m => ({...m, pobreza:m.pobreza_10, pobreza_m:m.pobreza_m_10, pobreza_e:m.pobreza_e_10, pobtot:m.pobtot}))
+    : filtered.filter(m => m.pobreza_15 != null).map(m => ({...m, pobreza:m.pobreza_15, pobreza_m:m.pobreza_m_15, pobreza_e:m.pobreza_e_15, pobtot:m.pobtot}));
+
+  document.getElementById('kpi-mun').textContent = filtered.length.toLocaleString('es-MX');
+  document.getElementById('kpi-pob').textContent = fmt(avg(rows.map(r=>r.pobreza).filter(v=>v!=null)));
+  document.getElementById('kpi-ext').textContent = fmt(avg(rows.map(r=>r.pobreza_e).filter(v=>v!=null)));
+  document.getElementById('kpi-mod').textContent = fmt(avg(rows.map(r=>r.pobreza_m).filter(v=>v!=null)));
+
+  // Población en pobreza
+  const pobPob = rows.reduce((s,r) => s + (r.pobreza != null && r.pobtot != null ? r.pobreza * r.pobtot : 0), 0);
+  document.getElementById('kpi-pobpob').textContent = (pobPob/1e6).toFixed(2) + 'M';
+
+  // Worst municipality
+  const worst = [...rows].sort((a,b)=>(b.pobreza||0)-(a.pobreza||0))[0];
+  if (worst) {
+    document.getElementById('kpi-worst').textContent = worst.cve_mun;
+    document.getElementById('kpi-worst-sub').textContent = `${ESTADOS[worst.ent]||worst.ent} · ${fmt(worst.pobreza)}`;
+  }
+
+  // Deltas (compare both years)
+  if (isBoth && rows15.length && rows10.length) {
+    const a15 = avg(rows15.map(r=>r.pobreza_15).filter(v=>v!=null));
+    const a10 = avg(rows10.map(r=>r.pobreza_10).filter(v=>v!=null));
+    const d   = a15 - a10;
+    setDelta('kpi-pob-d', d);
+
+    const ae15 = avg(rows15.map(r=>r.pobreza_e_15).filter(v=>v!=null));
+    const ae10 = avg(rows10.map(r=>r.pobreza_e_10).filter(v=>v!=null));
+    setDelta('kpi-ext-d', ae15-ae10);
+
+    const am15 = avg(rows15.map(r=>r.pobreza_m_15).filter(v=>v!=null));
+    const am10 = avg(rows10.map(r=>r.pobreza_m_10).filter(v=>v!=null));
+    setDelta('kpi-mod-d', am15-am10);
+
+    const pp15 = rows15.reduce((s,r)=>s+(r.pobreza_15*r.pobtot||0),0);
+    const pp10 = rows10.reduce((s,r)=>s+(r.pobreza_10*r.pobtot||0),0);
+    setDelta('kpi-pobpob-d', (pp15-pp10)/1e6, true);
+  } else {
+    ['kpi-pob-d','kpi-ext-d','kpi-mod-d','kpi-pobpob-d'].forEach(id=>{ document.getElementById(id).textContent=''; });
+  }
+}
+
+function setDelta(id, val, millions=false) {
+  const el = document.getElementById(id);
+  if (val == null || isNaN(val)) { el.textContent=''; return; }
+  const sign = val > 0 ? '▲ +' : '▼ ';
+  const str  = millions ? (val/1).toFixed(2)+'M' : (val*100).toFixed(1)+'pp';
+  el.className = 'kpi-delta ' + (val < 0 ? 'down' : 'up');
+  el.textContent = sign + str + ' vs 2010';
+}
+
+/* ── Charts ───────────────────────────────────────────── */
+const CHART_DEFAULTS = {
+  plugins: { legend: { labels: { color: '#8b90a8', font: { size: 11 } } } },
+  scales: {
+    x: { ticks: { color: '#8b90a8', font:{size:10} }, grid: { color: '#2d3250' } },
+    y: { ticks: { color: '#8b90a8', font:{size:10} }, grid: { color: '#2d3250' } },
+  },
+};
+
+function destroyChart(id) { if (charts[id]) { charts[id].destroy(); delete charts[id]; } }
+
+function updateCharts(year, indic) {
+  buildHistogram(year, indic);
+  buildTop15(year, indic);
+  buildEstadoChart(year);
+  buildScatter();
+}
+
+/* Histogram */
+function buildHistogram(year, indic) {
+  destroyChart('hist');
+  const field10 = indic + '_10';
+  const field15 = indic + '_15';
+
+  const bins = Array.from({length:10},(_,i)=>i*10);
+  function bucket(vals) {
+    const b = new Array(10).fill(0);
+    vals.forEach(v => { if(v!=null){ const i=Math.min(9,Math.floor(v*100/10)); b[i]++; } });
+    return b;
+  }
+  const labels = bins.map(b=>`${b}–${b+10}%`);
+
+  const datasets = [];
+  if (year !== '2015') {
+    const v10 = filtered.map(m=>m[field10]).filter(v=>v!=null);
+    datasets.push({ label:'2010', data: bucket(v10), backgroundColor:'rgba(79,142,247,.7)', borderRadius:4 });
+  }
+  if (year !== '2010') {
+    const v15 = filtered.map(m=>m[field15]).filter(v=>v!=null);
+    datasets.push({ label:'2015', data: bucket(v15), backgroundColor:'rgba(247,168,79,.7)', borderRadius:4 });
+  }
+
+  const ctx = document.getElementById('chart-hist').getContext('2d');
+  charts['hist'] = new Chart(ctx, {
+    type: 'bar',
+    data: { labels, datasets },
+    options: { ...CHART_DEFAULTS, responsive:true, plugins:{...CHART_DEFAULTS.plugins}, scales:{...CHART_DEFAULTS.scales} },
+  });
+}
+
+/* Top 15 bar */
+function buildTop15(year, indic) {
+  destroyChart('top');
+  const field = year === '2010' ? indic+'_10' : indic+'_15';
+  const useBoth = year === 'both';
+
+  let sorted;
+  if (useBoth) {
+    sorted = [...filtered].filter(m=>m[indic+'_15']!=null).sort((a,b)=>(b[indic+'_15']||0)-(a[indic+'_15']||0)).slice(0,15);
+  } else {
+    sorted = [...filtered].filter(m=>m[field]!=null).sort((a,b)=>(b[field]||0)-(a[field]||0)).slice(0,15);
+  }
+
+  const labels = sorted.map(m=>m.cve_mun);
+  const datasets = [];
+  if (!useBoth || year !== '2015') {
+    datasets.push({ label:'2010', data: sorted.map(m=>m[indic+'_10']), backgroundColor:'rgba(79,142,247,.8)', borderRadius:4 });
+  }
+  if (!useBoth || year !== '2010') {
+    datasets.push({ label:'2015', data: sorted.map(m=>m[indic+'_15']), backgroundColor:'rgba(247,168,79,.8)', borderRadius:4 });
+  }
+  if (year === 'both') {
+    datasets.length = 0;
+    datasets.push({ label:'2010', data: sorted.map(m=>m[indic+'_10']), backgroundColor:'rgba(79,142,247,.8)', borderRadius:4 });
+    datasets.push({ label:'2015', data: sorted.map(m=>m[indic+'_15']), backgroundColor:'rgba(247,168,79,.8)', borderRadius:4 });
+  }
+
+  const ctx = document.getElementById('chart-top').getContext('2d');
+  charts['top'] = new Chart(ctx, {
+    type: 'bar',
+    data: { labels, datasets },
+    options: {
+      indexAxis: 'y',
+      responsive: true,
+      plugins: { ...CHART_DEFAULTS.plugins },
+      scales: {
+        x: { ...CHART_DEFAULTS.scales.x, max:1, ticks:{ ...CHART_DEFAULTS.scales.x.ticks, callback:v=>(v*100).toFixed(0)+'%' } },
+        y: { ...CHART_DEFAULTS.scales.y },
+      },
+    },
+  });
+}
+
+/* Estado stacked bar */
+function buildEstadoChart(year) {
+  destroyChart('estado');
+  const sfx = year === '2010' ? '_10' : '_15';
+
+  // Group by state
+  const byEst = {};
+  filtered.forEach(m => {
+    if (!byEst[m.ent]) byEst[m.ent] = [];
+    byEst[m.ent].push(m);
+  });
+
+  const states = Object.keys(byEst).sort().slice(0,32);
+  const labels = states.map(e=>ESTADOS[e]||e);
+
+  const datasets = CARENCIAS.map((c,i)=>({
+    label: CARENCIAS_LABELS[i],
+    data: states.map(e => avg(byEst[e].map(m=>m[c+sfx]).filter(v=>v!=null))),
+    backgroundColor: `hsla(${i*55+200},65%,55%,.75)`,
+    borderRadius: 2,
+  }));
+
+  const ctx = document.getElementById('chart-estado').getContext('2d');
+  charts['estado'] = new Chart(ctx, {
+    type: 'bar',
+    data: { labels, datasets },
+    options: {
+      responsive: true,
+      plugins: { ...CHART_DEFAULTS.plugins, legend:{ ...CHART_DEFAULTS.plugins.legend, position:'bottom' } },
+      scales: {
+        x: { stacked:true, ...CHART_DEFAULTS.scales.x, ticks:{...CHART_DEFAULTS.scales.x.ticks,maxRotation:60,font:{size:9}} },
+        y: { stacked:true, ...CHART_DEFAULTS.scales.y, max:3, ticks:{...CHART_DEFAULTS.scales.y.ticks,callback:v=>v.toFixed(1)} },
+      },
+    },
+  });
+}
+
+/* Scatter 2010 vs 2015 */
+function buildScatter() {
+  destroyChart('scatter');
+  const pts = filtered
+    .filter(m=>m.pobreza_10!=null && m.pobreza_15!=null)
+    .slice(0,600)   // sample to keep chart responsive
+    .map(m=>({ x: m.pobreza_10, y: m.pobreza_15, label: m.cve_mun }));
+
+  const ctx = document.getElementById('chart-scatter').getContext('2d');
+  charts['scatter'] = new Chart(ctx, {
+    type: 'scatter',
+    data: { datasets: [{
+      label: 'Municipios',
+      data: pts,
+      backgroundColor: pts.map(p=>{
+        const d = p.y - p.x;
+        return d < -0.03 ? 'rgba(76,175,124,.6)' : d > 0.03 ? 'rgba(224,92,92,.6)' : 'rgba(79,142,247,.4)';
+      }),
+      pointRadius: 3,
+    }]},
+    options: {
+      responsive: true,
+      plugins: {
+        ...CHART_DEFAULTS.plugins,
+        tooltip: {
+          callbacks: {
+            label: ctx => `${ctx.raw.label}: 2010=${fmt(ctx.raw.x)} → 2015=${fmt(ctx.raw.y)}`,
+          },
+        },
+      },
+      scales: {
+        x: { ...CHART_DEFAULTS.scales.x, title:{display:true,text:'Pobreza 2010',color:'#8b90a8'}, ticks:{...CHART_DEFAULTS.scales.x.ticks,callback:v=>(v*100).toFixed(0)+'%'} },
+        y: { ...CHART_DEFAULTS.scales.y, title:{display:true,text:'Pobreza 2015',color:'#8b90a8'}, ticks:{...CHART_DEFAULTS.scales.y.ticks,callback:v=>(v*100).toFixed(0)+'%'} },
+      },
+    },
+  });
+}
+
+/* ── Table ────────────────────────────────────────────── */
+function renderTable() {
+  const year = document.getElementById('sel-year').value;
+  const tbody = document.getElementById('tbl-body');
+  const sortedData = [...filtered].sort((a,b) => {
+    const av = a[sortCol], bv = b[sortCol];
+    if (av==null && bv==null) return 0;
+    if (av==null) return 1;
+    if (bv==null) return -1;
+    return (av < bv ? -1 : av > bv ? 1 : 0) * sortDir;
+  });
+
+  const total = sortedData.length;
+  const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
+  page = Math.min(page, totalPages);
+  const slice = sortedData.slice((page-1)*PAGE_SIZE, page*PAGE_SIZE);
+
+  document.getElementById('tbl-count').textContent = `${total.toLocaleString('es-MX')} registros`;
+
+  tbody.innerHTML = '';
+  slice.forEach(m => {
+    const delta = m.delta;
+    let deltaPill = '<span class="pill pill-neu">—</span>';
+    if (delta != null) {
+      const sign = delta > 0 ? '▲ +' : '▼ ';
+      const cls  = delta < -0.005 ? 'pill-down' : delta > 0.005 ? 'pill-up' : 'pill-neu';
+      deltaPill  = `<span class="pill ${cls}">${sign}${(delta*100).toFixed(1)}pp</span>`;
+    }
+
+    const bar = (v, color='#4f8ef7') => v!=null
+      ? `<div class="pct-bar"><div class="bar-track"><div class="bar-fill" style="width:${Math.round(v*100)}%;background:${color}"></div></div><span class="bar-num">${fmt(v)}</span></div>`
+      : '—';
+
+    const tr = document.createElement('tr');
+    tr.innerHTML = `
+      <td>${m.cve_mun}</td>
+      <td>${ESTADOS[m.ent]||m.ent}</td>
+      <td>${fmtN(m.pobtot)}</td>
+      <td>${bar(m.pobreza,'#e05c5c')}</td>
+      <td>${bar(m.pobreza_m,'#f7a84f')}</td>
+      <td>${bar(m.pobreza_e,'#c0392b')}</td>
+      <td>${bar(m.ic_rezedu,'#4f8ef7')}</td>
+      <td>${bar(m.ic_asalud,'#7b68ee')}</td>
+      <td>${bar(m.ic_segsoc,'#48d1cc')}</td>
+      <td>${bar(m.ic_ali,'#ff7f7f')}</td>
+      <td style="display:${year==='both'?'':'none'}">${deltaPill}</td>
+    `;
+    tbody.appendChild(tr);
+  });
+
+  renderPagination(totalPages);
+}
+
+function renderPagination(totalPages) {
+  const pg = document.getElementById('pagination');
+  pg.innerHTML = '';
+
+  const prev = document.createElement('button');
+  prev.className = 'page-btn'; prev.textContent = '‹ Anterior';
+  prev.disabled = page <= 1;
+  prev.onclick = () => { page--; renderTable(); };
+  pg.appendChild(prev);
+
+  const info = document.createElement('span');
+  info.className = 'page-info';
+  info.textContent = `Página ${page} de ${totalPages}`;
+  pg.appendChild(info);
+
+  const next = document.createElement('button');
+  next.className = 'page-btn'; next.textContent = 'Siguiente ›';
+  next.disabled = page >= totalPages;
+  next.onclick = () => { page++; renderTable(); };
+  pg.appendChild(next);
+}
+
+/* ── Run ──────────────────────────────────────────────── */
+init().catch(err => {
+  console.error(err);
+  document.getElementById('loader').innerHTML = `<p style="color:var(--danger);text-align:center;padding:2rem">Error al cargar los datos.<br><small>${err}</small><br><br><b>Asegúrate de abrir el archivo desde un servidor web local.</b></p>`;
+  setStatus('err', 'Error al cargar datos');
+});
+</script>
+</body>
+</html>
